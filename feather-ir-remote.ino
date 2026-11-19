@@ -17,12 +17,13 @@
 #include <IRremote.hpp>
 #include <Adafruit_BLE.h>
 #include <Adafruit_BluefruitLE_SPI.h>
+#include <Mouse.h>
 
 Adafruit_BluefruitLE_SPI ble(8, 7, 4);   // radio: CS, IRQ, RST
 
 // Declared up here because the Arduino builder generates function
 // prototypes above the first function, and pollInput() takes a LineIn&.
-struct LineIn { String buf; unsigned long lastByte = 0; };
+struct LineIn { String buf; unsigned long lastByte = 0; uint8_t skip = 0; };
 LineIn bleIn, usbIn;
 
 // ---------- Known codes for your LED light (found with the Mega scanner) ----------
@@ -88,6 +89,14 @@ bool   slotUsed[SLOTS] = {false};
 IRData last;
 bool   haveLast = false;
 bool   learning = false;
+
+// ---------- Mode: IR remote or USB mouse (Control Pad button 3 toggles) ----------
+bool mouseMode = false;                         // boots in IR mode
+const int SPEEDS[] = {2, 6, 14};                // mouse pixels per 10 ms tick: slow, medium, fast
+const int NUM_SPEEDS = sizeof(SPEEDS) / sizeof(SPEEDS[0]);
+int speedIdx = 1;
+int dirX = 0, dirY = 0;                         // current D-pad direction (-1, 0, 1)
+unsigned long lastMoveMs = 0;
 
 // ---------- Output: every line goes to the phone and to USB serial ----------
 void out(const String& s) { Serial.println(s); ble.println(s); }
@@ -231,6 +240,8 @@ void help() {
   out("SEND:  send CC  or  send AAAA CC  (hex)");
   out("LEARN: learn stop replay save N play N list");
   out("TEST:  diag  (checks radio, PNP, receiver, IR loopback)");
+  out(String("MODE:  mode / mode ir / mode mouse  (pad button 3 toggles)  now: ") +
+      (mouseMode ? "MOUSE" : "IR"));
 }
 
 void handle(String cmd) {
@@ -308,21 +319,62 @@ void handle(String cmd) {
   }
 
   if (cmd == "help" || cmd == "?") { help(); return; }
+  if (cmd == "mode")       { setMode(!mouseMode); return; }
+  if (cmd == "mode mouse") { setMode(true);       return; }
+  if (cmd == "mode ir")    { setMode(false);      return; }
   if (cmd == "diag") { scanning = false; diag(); return; }
   out("? " + cmd + "  (type help)");
 }
 
-// Control Pad: 1 on, 2 off, 3 cycle, 4 strobe, Up/Down = color, Left/Right = scanner back/next
-void handlePad(uint8_t b) {
+// ---------- Modes ----------
+void blinkLed(int times, int ms) {
+  for (int i = 0; i < times; i++) {
+    digitalWrite(LED_BUILTIN, HIGH); delay(ms);
+    digitalWrite(LED_BUILTIN, LOW);  delay(ms);
+  }
+}
+
+void setMode(bool mouse) {
+  mouseMode = mouse;
+  dirX = dirY = 0;                               // never leave the cursor drifting
+  Mouse.release(MOUSE_LEFT);
+  Mouse.release(MOUSE_RIGHT);
+  if (mouse) scanning = false;
+  out(mouse ? "MODE: MOUSE  pad: arrows move, 1 left, 2 right, 4 speed, 3 = IR"
+            : "MODE: IR  pad: 1 scan, 2 stop, 4 cycle, up/down color, left/right step, 3 = mouse");
+  blinkLed(mouse ? 2 : 1, 400);                  // 1 long blink = IR, 2 = mouse
+}
+
+void mousePad(uint8_t b, bool pressed) {
   switch (b) {
-    case 1: handle("on");     break;
-    case 2: handle("off");    break;
-    case 3: handle("cycle");  break;
-    case 4: handle("strobe"); break;
-    case 5: handle("next");   break;
-    case 6: handle("prev");   break;
-    case 7: handle("b");      break;
-    case 8: handle("n");      break;
+    case 5: dirY = pressed ? -1 : 0; break;      // up
+    case 6: dirY = pressed ?  1 : 0; break;      // down
+    case 7: dirX = pressed ? -1 : 0; break;      // left
+    case 8: dirX = pressed ?  1 : 0; break;      // right
+    case 1: pressed ? Mouse.press(MOUSE_LEFT)  : Mouse.release(MOUSE_LEFT);  break;
+    case 2: pressed ? Mouse.press(MOUSE_RIGHT) : Mouse.release(MOUSE_RIGHT); break;
+    case 4:
+      if (pressed) { speedIdx = (speedIdx + 1) % NUM_SPEEDS; blinkLed(speedIdx + 1, 120); }
+      break;
+  }
+}
+
+// Control Pad. Button 3 switches modes in both.
+//   IR mode:    1 start scan, 2 stop scan, 4 cycle, Up/Down = next/prev color,
+//               Left/Right = scanner back/next (light on/off: type on / off in UART)
+//   Mouse mode: arrows move, 1 left click (hold = drag), 2 right click, 4 cycle speed
+void handlePad(uint8_t b, bool pressed) {
+  if (b == 3) { if (pressed) setMode(!mouseMode); return; }
+  if (mouseMode) { mousePad(b, pressed); return; }
+  if (!pressed) return;                          // IR acts on press only
+  switch (b) {
+    case 1: if (!scanning) scanPauseToggle(); break;   // start (or resume) scan
+    case 2: if (scanning)  scanPauseToggle(); break;   // stop (pause) scan
+    case 4: handle("cycle"); break;
+    case 5: handle("next");  break;
+    case 6: handle("prev");  break;
+    case 7: handle("b");     break;
+    case 8: handle("n");     break;
   }
 }
 
@@ -333,11 +385,14 @@ void pollInput(Stream& s, LineIn& in) {
   while (s.available()) {
     char c = s.read();
     in.lastByte = millis();
+    if (in.skip) { in.skip--; continue; }        // pad packet checksum byte: can be any value,
+                                                 // even '\n' or 0, so never parse it as text
     if (c == '\n' || c == '\r') { handle(in.buf); in.buf = ""; continue; }
     in.buf += c;
-    if (in.buf.startsWith("!B") && in.buf.length() >= 5) {   // "!B" button state CRC
-      if (in.buf[3] == '1') handlePad(in.buf[2] - '0');      // act on press only
+    if (in.buf.length() == 4 && in.buf.startsWith("!B")) {    // "!B" button state, then CRC
+      handlePad(in.buf[2] - '0', in.buf[3] == '1');
       in.buf = "";
+      in.skip = 1;
     }
   }
   if (in.buf.length() && millis() - in.lastByte > 60) { handle(in.buf); in.buf = ""; }
@@ -346,6 +401,7 @@ void pollInput(Stream& s, LineIn& in) {
 void setup() {
   pinMode(IR_SEND_PIN, OUTPUT);                  // PNP off right away: base HIGH = LED off
   digitalWrite(IR_SEND_PIN, HIGH);
+  pinMode(LED_BUILTIN, OUTPUT);                  // red LED: mode and speed blinks
   Serial.begin(115200);                          // no wait, so it runs on battery too
   IrReceiver.begin(IR_RECEIVE_PIN, DISABLE_LED_FEEDBACK);
   IrReceiver.stop();                             // decoder idle until "learn"
@@ -355,9 +411,10 @@ void setup() {
   bleOk = ble.begin(false);
   if (!bleOk) Serial.println(F("Bluefruit radio not found"));
   ble.echo(false);
-  ble.sendCommandCheckOK("AT+GAPDEVNAME=IR-Remote");
+  ble.sendCommandCheckOK("AT+GAPDEVNAME=Feather Remote");
   ble.setMode(BLUEFRUIT_MODE_DATA);
-  out("IR-Remote ready - type help");
+  Mouse.begin();
+  out("Feather Remote ready in IR mode - type help, pad button 3 = mouse mode");
 }
 
 void loop() {
@@ -365,4 +422,8 @@ void loop() {
   pollInput(Serial, usbIn);
   if (learning) checkDecoder();
   scanTick();
+  if (mouseMode && (dirX || dirY) && millis() - lastMoveMs >= 10) {
+    lastMoveMs = millis();
+    Mouse.move(dirX * SPEEDS[speedIdx], dirY * SPEEDS[speedIdx]);
+  }
 }

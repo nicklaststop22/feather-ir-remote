@@ -1,6 +1,6 @@
 # feather-ir-remote
 
-Phone-controlled IR remote for an RGB LED light, running on an **Adafruit Feather M0 Bluefruit LE**.
+Phone-controlled IR remote for an RGB LED light, and a phone-controlled USB mouse, running on an **Adafruit Feather M0 Bluefruit LE** (BLE name "Feather Remote").
 Commands come in over Bluetooth from the **Adafruit Bluefruit Connect** app (UART screen or Control Pad)
 or over USB serial. The Feather sends NEC IR codes, and it also includes an NEC scanner and an IR decoder for learning codes from other remotes.
 
@@ -50,7 +50,22 @@ Send these from Bluefruit Connect → UART (line ending optional) or the USB ser
 | `learn` `stop` `replay` `save N` `play N` `list` | Decoder and 8 RAM slots |
 | `diag` | Self-test: radio, PNP wiring, receiver, IR loopback |
 
-**Control Pad:** 1 on, 2 off, 3 cycle, 4 strobe, Up/Down colors, Left/Right scanner back/next.
+| `mode` / `mode ir` / `mode mouse` | Switch between IR remote and USB mouse |
+
+## Two modes on one Control Pad
+
+The board is also a USB HID mouse. **Control Pad button 3 toggles the mode** (the red LED blinks once long for IR, twice for mouse). It always boots in IR mode.
+
+| Pad | IR mode | Mouse mode |
+|---|---|---|
+| **3** | switch to mouse | switch to IR |
+| 1 | start / resume scan | left click (hold = drag) |
+| 2 | stop (pause) scan | right click |
+| 4 | cycle colors | cursor speed (LED blinks 1-3x) |
+| Up / Down | next / prev color | move |
+| Left / Right | scanner back / next | move |
+
+Light on/off, `strobe`, and every other text command still work from the UART screen in either mode.
 
 ## Light codes (NEC, address 0xEF00)
 
