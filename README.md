@@ -49,15 +49,27 @@ It also includes the tools for **finding** those codes: a brute-force **NEC scan
 ## How it works
 
 ```mermaid
-flowchart LR
-    Phone["📱 Phone<br/>Bluefruit Connect"] -- "BLE UART" --> Radio["nRF51822<br/>BLE radio"]
-    Radio -- "SPI" --> MCU["SAMD21<br/>this sketch"]
-    PC["💻 Computer"] <-- "USB: serial + HID mouse" --> MCU
-    MCU -- "pin 5" --> PNP["S9012<br/>PNP driver"]
-    PNP --> LED["IR LED"]
-    LED -. "38 kHz NEC" .-> Light["💡 RGB LED light"]
-    Remote["Any IR remote"] -. "IR" .-> RX["TSOP38238<br/>receiver"]
+flowchart TB
+    Phone["📱 Phone<br/>Bluefruit Connect"]
+    subgraph Feather["Feather M0 Bluefruit LE"]
+        Radio["nRF51822<br/>BLE radio"]
+        MCU["SAMD21<br/>this sketch"]
+    end
+    PC["💻 Computer"]
+    Remote["Any IR remote"]
+    RX["TSOP38238<br/>receiver"]
+    PNP["S9012<br/>PNP driver"]
+    LED["IR LED"]
+    Light["💡 RGB LED light"]
+
+    Phone -- "BLE UART" --> Radio
+    Radio -- "SPI" --> MCU
+    MCU <-- "USB: serial + HID mouse" --> PC
+    Remote -. "IR" .-> RX
     RX -- "pin 6" --> MCU
+    MCU -- "pin 5" --> PNP
+    PNP --> LED
+    LED -. "38 kHz NEC" .-> Light
 ```
 
 The Feather M0 Bluefruit LE has two processors: a **SAMD21** that runs this sketch, and an **nRF51822** that handles Bluetooth and talks to the SAMD21 over SPI. The phone's Bluefruit Connect app sends either typed text (UART screen) or button packets (Control Pad screen). The sketch parses both. In IR mode it generates the 38 kHz NEC signal with [IRremote](https://github.com/Arduino-IRremote/Arduino-IRremote), and in mouse mode it sends USB HID mouse reports.
