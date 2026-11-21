@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 375" width="820" height="375" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <title>Feather IR Remote architecture</title>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#8b949e"/>
+    </marker>
+    <style>
+      .title { font-size: 16px; font-weight: 600; fill: #111827; text-anchor: middle; }
+      .sub   { font-size: 12.5px; fill: #374151; text-anchor: middle; }
+      .wire  { stroke: #8b949e; stroke-width: 2; fill: none; }
+      .beam  { stroke: #ef4444; stroke-width: 2; fill: none; stroke-dasharray: 6 5; }
+      .label { font-size: 12.5px; fill: #8b949e; font-weight: 600; }
+      .group { fill: none; stroke: #8b949e; stroke-width: 1.5; stroke-dasharray: 5 4; }
+    </style>
+  </defs>
+
+  <!-- Feather board outline -->
+  <rect class="group" x="225" y="14" width="335" height="126" rx="14"/>
+  <text class="label" x="240" y="34">FEATHER M0 BLUEFRUIT LE</text>
+
+  <!-- Row 1: phone -> radio -> SAMD21 <-> computer -->
+  <rect rx="10" fill="#eef1f5" stroke="#6b7280" stroke-width="2" x="20" y="55" width="150" height="62"/>
+  <text class="title" x="95" y="81">Phone</text>
+  <text class="sub" x="95" y="101">Bluefruit Connect</text>
+
+  <rect rx="10" fill="#dbeafe" stroke="#3b82f6" stroke-width="2" x="245" y="55" width="125" height="62"/>
+  <text class="title" x="307" y="81">nRF51822</text>
+  <text class="sub" x="307" y="101">BLE radio</text>
+
+  <rect rx="10" fill="#dbeafe" stroke="#3b82f6" stroke-width="2" x="420" y="55" width="125" height="62"/>
+  <text class="title" x="482" y="81">SAMD21</text>
+  <text class="sub" x="482" y="101">this sketch</text>
+
+  <rect rx="10" fill="#eef1f5" stroke="#6b7280" stroke-width="2" x="645" y="55" width="155" height="62"/>
+  <text class="title" x="722" y="81">Computer</text>
+  <text class="sub" x="722" y="101">serial + USB mouse</text>
+
+  <path class="wire" d="M170,86 H243" marker-end="url(#arrow)"/>
+  <text class="label" x="176" y="78">BLE UART</text>
+
+  <path class="wire" d="M370,86 H418" marker-end="url(#arrow)"/>
+  <text class="label" x="382" y="78">SPI</text>
+
+  <path class="wire" d="M547,86 H643" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+  <text class="label" x="580" y="78">USB</text>
+
+  <!-- Receive path: remote -> TSOP -> pin 6 -->
+  <rect rx="10" fill="#eef1f5" stroke="#6b7280" stroke-width="2" x="20" y="200" width="150" height="58"/>
+  <text class="title" x="95" y="225">Any IR remote</text>
+  <text class="sub" x="95" y="244">for learning codes</text>
+
+  <rect rx="10" fill="#fee2e2" stroke="#ef4444" stroke-width="2" x="245" y="200" width="125" height="58"/>
+  <text class="title" x="307" y="225">TSOP38238</text>
+  <text class="sub" x="307" y="244">IR receiver</text>
+
+  <path class="beam" d="M170,229 H243" marker-end="url(#arrow)"/>
+  <text class="label" x="200" y="221">IR</text>
+
+  <path class="wire" d="M370,229 H445 V119" marker-end="url(#arrow)"/>
+  <text class="label" x="452" y="178">pin 6</text>
+
+  <!-- Send path: pin 5 -> S9012 -> IR LED -> light -->
+  <rect rx="10" fill="#fee2e2" stroke="#ef4444" stroke-width="2" x="470" y="200" width="125" height="58"/>
+  <text class="title" x="532" y="225">S9012</text>
+  <text class="sub" x="532" y="244">PNP driver</text>
+
+  <path class="wire" d="M520,117 V198" marker-end="url(#arrow)"/>
+  <text class="label" x="527" y="165">pin 5</text>
+
+  <rect rx="10" fill="#fee2e2" stroke="#ef4444" stroke-width="2" x="470" y="300" width="125" height="58"/>
+  <text class="title" x="532" y="325">IR LED</text>
+  <text class="sub" x="532" y="344">~65 mA pulses</text>
+
+  <path class="wire" d="M532,258 V298" marker-end="url(#arrow)"/>
+
+  <rect rx="10" fill="#eef1f5" stroke="#6b7280" stroke-width="2" x="645" y="300" width="155" height="58"/>
+  <text class="title" x="722" y="325">RGB LED light</text>
+  <text class="sub" x="722" y="344">NEC address 0xEF00</text>
+
+  <path class="beam" d="M595,329 H643" marker-end="url(#arrow)"/>
+  <text class="label" x="598" y="321">38 kHz</text>
+</svg>

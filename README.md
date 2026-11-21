@@ -48,29 +48,9 @@ It also includes the tools for **finding** those codes: a brute-force **NEC scan
 
 ## How it works
 
-```mermaid
-flowchart TB
-    Phone["📱 Phone<br/>Bluefruit Connect"]
-    subgraph Feather["Feather M0 Bluefruit LE"]
-        Radio["nRF51822<br/>BLE radio"]
-        MCU["SAMD21<br/>this sketch"]
-    end
-    PC["💻 Computer"]
-    Remote["Any IR remote"]
-    RX["TSOP38238<br/>receiver"]
-    PNP["S9012<br/>PNP driver"]
-    LED["IR LED"]
-    Light["💡 RGB LED light"]
-
-    Phone -- "BLE UART" --> Radio
-    Radio -- "SPI" --> MCU
-    MCU <-- "USB: serial + HID mouse" --> PC
-    Remote -. "IR" .-> RX
-    RX -- "pin 6" --> MCU
-    MCU -- "pin 5" --> PNP
-    PNP --> LED
-    LED -. "38 kHz NEC" .-> Light
-```
+<p align="center">
+  <img src="docs/architecture.svg" alt="Architecture: phone talks over BLE to the nRF51822 radio, which passes commands over SPI to the SAMD21. The SAMD21 drives the IR LED through an S9012 PNP on pin 5 to control the RGB light, reads an IR receiver on pin 6 for learning codes, and connects to a computer over USB as serial and a mouse." width="820">
+</p>
 
 The Feather M0 Bluefruit LE has two processors: a **SAMD21** that runs this sketch, and an **nRF51822** that handles Bluetooth and talks to the SAMD21 over SPI. The phone's Bluefruit Connect app sends either typed text (UART screen) or button packets (Control Pad screen). The sketch parses both. In IR mode it generates the 38 kHz NEC signal with [IRremote](https://github.com/Arduino-IRremote/Arduino-IRremote), and in mouse mode it sends USB HID mouse reports.
 
